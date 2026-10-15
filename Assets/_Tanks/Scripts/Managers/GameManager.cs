@@ -15,6 +15,8 @@ namespace Tanks.Complete
             Game
         }
 
+        private float gameStartTime;
+
         // Data about the selected tanks passed from the menu to the GameManager
         public class PlayerData
         {
@@ -50,8 +52,17 @@ namespace Tanks.Complete
         private int m_PlayerCount = 0;              // The number of players (2 to 4), decided from the number of PlayerData passed by the menu
         private TextMeshProUGUI m_TitleText;        // The text used to display game message. Automatically found as part of the Menu prefab
 
+
+        private float matchTimer = 240f;
+        private bool timeOver = false;
+
+        public TextMeshProUGUI timerText;
+
         private void Start()
         {
+            matchTimer = 240f;
+            gameStartTime = Time.time;
+            timeOver=false;
             m_CurrentState = GameState.MainMenu;
 
             // Find the text used to display game info. Need to look at inactive object too, as the Menu prefab (which contains it) may be
@@ -74,6 +85,32 @@ namespace Tanks.Complete
                 Debug.LogError("You need to assign 4 tank prefab in the GameManager!");
             }
         }
+
+
+        private void Update()
+{
+    if (m_CurrentState != GameState.Game)
+        return;
+
+    if (!timeOver)
+    {
+        matchTimer -= Time.deltaTime;
+
+        int minutes = Mathf.FloorToInt(matchTimer / 60);
+        int seconds = Mathf.FloorToInt(matchTimer % 60);
+
+        timerText.text =
+            minutes.ToString("00") + ":" +
+            seconds.ToString("00");
+
+        if (matchTimer <= 0)
+        {
+            timerText.text = "00:00";
+            timeOver = true;
+        }
+    }
+}
+
 
         void GameStart()
         {
@@ -173,10 +210,16 @@ namespace Tanks.Complete
             yield return StartCoroutine (RoundEnding());
 
             // This code is not run until 'RoundEnding' has finished.  At which point, check if a game winner has been found.
-            if (m_GameWinner != null)
+            // if (m_GameWinner != null)
+            // {
+            //     // If there is a game winner, restart the level.
+            //     SceneManager.LoadScene (0);
+            // }
+            if (m_GameWinner != null || timeOver)
             {
-                // If there is a game winner, restart the level.
-                SceneManager.LoadScene (0);
+                yield return new WaitForSeconds(5f);
+
+                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
             }
             else
             {
@@ -213,12 +256,13 @@ namespace Tanks.Complete
             // Clear the text from the screen.
             m_TitleText.text = string.Empty;
 
-            // While there is not one tank left...
-            while (!OneTankLeft())
-            {
-                // ... return on the next frame.
-                yield return null;
-            }
+        while (!OneTankLeft())
+        {
+            if (timeOver)
+                break;
+
+            yield return null;
+        }
         }
 
 
@@ -304,12 +348,17 @@ namespace Tanks.Complete
         // Returns a string message to display at the end of each round.
         private string EndMessage()
         {
+
+            if (timeOver)
+{
+    return "Se acabo el tiempo!\n\nAmbos jugadores han perdido!";
+}
             // By default when a round ends there are no winners so the default end message is a draw.
             string message = "DRAW!";
 
             // If there is a winner then change the message to reflect that.
             if (m_RoundWinner != null)
-                message = m_RoundWinner.m_ColoredPlayerText + " WINS THE ROUND!";
+                message = m_RoundWinner.m_ColoredPlayerText + " GANO LA RONDA!";
 
             // Add some line breaks after the initial message.
             message += "\n\n\n\n";
@@ -317,12 +366,20 @@ namespace Tanks.Complete
             // Go through all the tanks and add each of their scores to the message.
             for (int i = 0; i < m_PlayerCount; i++)
             {
-                message += m_SpawnPoints[i].m_ColoredPlayerText + ": " + m_SpawnPoints[i].m_Wins + " WINS\n";
+                message += m_SpawnPoints[i].m_ColoredPlayerText + ": " + m_SpawnPoints[i].m_Wins + " GANO\n";
             }
 
-            // If there is a game winner, change the entire message to reflect that.
-            if (m_GameWinner != null)
-                message = m_GameWinner.m_ColoredPlayerText + " WINS THE GAME!";
+                        // If there is a game winner, change the entire message to reflect that.
+                        if (m_GameWinner != null)
+            {
+                float totalTime = Time.time - gameStartTime;
+
+                message =
+                    m_GameWinner.m_ColoredPlayerText +
+                    "GANO EL JUEGO!" +
+                    "\n\nPUNTUACION: " + m_GameWinner.m_Wins +
+                    "\nTIEMPO: " + totalTime.ToString("F1") + " segundos";
+            }
 
             return message;
         }
